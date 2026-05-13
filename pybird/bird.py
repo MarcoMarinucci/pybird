@@ -219,7 +219,6 @@ class Bird(object):
         """
 
         f = self.f
-        # print ()
 
         if self.co.exact_time:
             ## EdS: Y1 = 0., G1t = 3/7., V12t = 1/7.
@@ -240,9 +239,13 @@ class Bird(object):
             ct0 = bias["c0"] - f/3. * bias["c2"] + 3/35. * f**2 * bias["c4"]
             ct2 = bias["c2"] - 6/7. * f * bias["c4"]
             ct4 = bias["c4"]
+        elif self.eft_basis == 'pbj': 
+            ct0 = bias["c0"] 
+            ct2 = bias["c2"] 
+            ct4 = bias["c4"]
 
         if self.with_stoch:
-            if self.eft_basis in ["eastcoast", "westcoast"]:
+            if self.eft_basis in ["eastcoast", 'pbj', "westcoast"]:
                 self.bst = array([bias["ce0"], bias["ce1"] / self.co.km**2, bias["ce2"] / self.co.km**2]) / self.co.nd
             elif self.eft_basis == "eftoflss":
                 self.bst = array([bias["ce0"], bias["ce1"] / self.co.km**2, f*bias["ce2"] / self.co.km**2]) / self.co.nd
@@ -257,13 +260,13 @@ class Bird(object):
                 # cnnlo
                 if self.with_nnlo_counterterm: 
                     if self.eft_basis in ["eftoflss", "westcoast"]: self.cnnlo = array([0.25 * (b1**2 * bias["cr4"] * mu[4][2*i] + b1 * bias["cr6"] * mu[6][2*i]) / self.co.kr**4 for i in range(self.co.Nl)])
-                    elif self.eft_basis == "eastcoast": self.cnnlo = array([- bias["ct"] * f**4 * (b1**2 * mu[4][2*i] + 2. * b1 * f * mu[6][2*i] + f**2 * mu[8][2*i]) for i in range(self.co.Nl)])
+                    elif self.eft_basis in ["eastcoast", 'pbj']: self.cnnlo = array([- bias["ct"] * f**4 * (b1**2 * mu[4][2*i] + 2. * b1 * f * mu[6][2*i] + f**2 * mu[8][2*i]) for i in range(self.co.Nl)])
                 # b11
                 if self.with_tidal_alignments: self.b11 = array([(b1-bq/3.)**2 * mu[0][2*i] + 2. * (b1-bq/3.) * (f+bq) * mu[2][2*i] + (f+bq)**2 * mu[4][2*i] for i in range(self.co.Nl)])
                 else: self.b11 = array([b1**2 * mu[0][2*i] + 2. * b1 * f * mu[2][2*i] + f**2 * mu[4][2*i] for i in range(self.co.Nl)])
                 # bct
                 if self.eft_basis in ["eftoflss", "westcoast"]: self.bct = array([2. * b1 * (b5 * mu[0][2*i] + b6 * mu[2][2*i] + b7 * mu[4][2*i]) + 2. * f * (b5 * mu[2][2*i] + b6 * mu[4][2*i] + b7 * mu[6][2*i]) for i in range(self.co.Nl)])
-                elif self.eft_basis == "eastcoast": self.bct = array([- 2. * (ct0 * mu[0][2*i] + ct2 * f * mu[2][2*i] + ct4 * f**2 * mu[4][2*i]) for i in range(self.co.Nl)])
+                elif self.eft_basis in ["eastcoast", 'pbj']: self.bct = array([- 2. * (ct0 * mu[0][2*i] + ct2 * f * mu[2][2*i] + ct4 * f**2 * mu[4][2*i]) for i in range(self.co.Nl)])
                 # loop, exact_time
                 if self.co.exact_time:
                     self.b22 = array([array([b1**2*G1**2*mu[0][2*i], b1*b2*G1*mu[0][2*i], b1*b4*G1*mu[0][2*i], b2**2*mu[0][2*i], b2*b4*mu[0][2*i], b4**2*mu[0][2*i], b1**2*f*G1*mu[2][2*i], b1*b2*f*mu[2][2*i], b1*b4*f*mu[2][2*i], b1*f*G1**2*mu[2][2*i], b2*f*G1*mu[2][2*i], b4*f*G1*mu[2][2*i], b1**2*f**2*mu[2][2*i], b1**2*f**2*mu[4][2*i], b1*f**2*G1*mu[2][2*i], b1*f**2*G1*mu[4][2*i], b2*f**2*mu[2][2*i], b2*f**2*mu[4][2*i], b4*f**2*mu[2][2*i], b4*f**2*mu[4][2*i], f**2*G1**2*mu[4][2*i], b1*f**3*mu[4][2*i], b1*f**3*mu[6][2*i], f**3*G1*mu[4][2*i], f**3*G1*mu[6][2*i], f**4*mu[4][2*i], f**4*mu[6][2*i], f**4*mu[8][2*i], b1*f*G1*G1t*mu[2][2*i], b2*f*G1t*mu[2][2*i], b4*f*G1t*mu[2][2*i], b1*f**2*G1t*mu[4][2*i], f**2*G1*G1t*mu[4][2*i], f**3*G1t*mu[4][2*i], f**3*G1t*mu[6][2*i], f**2*G1t**2*mu[4][2*i]]) for i in range(self.co.Nl)])
@@ -281,11 +284,11 @@ class Bird(object):
             else: # evaluation with biases unspecified
                 if self.with_nnlo_counterterm:
                     if self.eft_basis in ["eftoflss", "westcoast"]: self.cnnlo = 0.25 * array([b1**2 * bias["cr4"], b1 * bias["cr6"]]) / self.co.kr**4
-                    elif self.eft_basis == "eastcoast": self.cnnlo = - bias["ct"] * f**4 * array([b1**2, 2. * b1 * f, f**2])   # these are not divided by kr^4 according to eastcoast definition; the prior is adjusted accordingly
+                    elif self.eft_basis in ["eastcoast", 'pbj']: self.cnnlo = - bias["ct"] * f**4 * array([b1**2, 2. * b1 * f, f**2])   # these are not divided by kr^4 according to eastcoast definition; the prior is adjusted accordingly
                 if self.with_tidal_alignments: self.b11 = array([(b1-bq/3.)**2, 2. * (b1-bq/3.) * (f+bq), (f+bq)**2])
                 else: self.b11 = array([b1**2, 2. * b1 * f, f**2])
                 if self.eft_basis in ["eftoflss", "westcoast"]: self.bct = array([2. * b1 * b5, 2. * b1 * b6, 2. * b1 * b7, 2. * f * b5, 2. * f * b6, 2. * f * b7])
-                elif self.eft_basis == "eastcoast": self.bct = - 2. * array([ct0, f * ct2, f**2 * ct4]) # these are not divided by km^2 or kr^2 according to eastcoast definition; the prior is adjusted accordingly
+                elif self.eft_basis in ["eastcoast", 'pbj']: self.bct = - 2. * array([ct0, f * ct2, f**2 * ct4]) # these are not divided by km^2 or kr^2 according to eastcoast definition; the prior is adjusted accordingly
                 if self.co.Nloop == 12: self.bloop = array([1., b1, b2, b3, b4, b1 * b1, b1 * b2, b1 * b3, b1 * b4, b2 * b2, b2 * b4, b4 * b4])
                 elif self.co.Nloop == 22: self.bloop = array([f**2, f**3, f**4, b1*f, b1*f**2, b1*f**3, b2*f, b2*f**2, b3*f, b4*f, b4*f**2, b1**2, b1**2*f, b1**2*f**2, b1*b2, b1*b2*f, b1*b3, b1*b4, b1*b4*f, b2**2, b2*b4, b4**2])
                 elif self.co.Nloop == 35: self.bloop = array([f**2, f**2*G1t, f**2*G1t**2, f**2*Y1, f**2*V12t, f**3, f**3*G1t, f**4, b1*f, b1*f*G1t, b1*f*Y1, b1*f*V12t, b1*f**2, b1*f**2*G1t, b1*f**3, b2*f, b2*f*G1t, b2*f**2, b3*f, b4*f, b4*f*G1t, b4*f**2, b1**2, b1**2*Y1, b1**2*f, b1**2*f*G1t, b1**2*f**2, b1*b2, b1*b2*f, b1*b3, b1*b4, b1*b4*f, b2**2, b2*b4, b4**2])
@@ -1055,7 +1058,7 @@ class Bird(object):
             An array of 7 EFT parameters: b_1, b_2, b_3, b_4, c_{ct}/k_{nl}^2, c_{r,1}/k_{m}^2, c_{r,2}/k_{m}^2
         """
 
-        # PZ: we can change all this function by a sum of all the terms that are asked (instead of calling setfullPs() and constructing an intermediate array that is useless)
+        # PZ: we can change all this function by a sum of all the terms that are asked (instead of calling setfullPs() and constructing an intermediate array that is useless)        
         self.setBias(bs)
         self.Ps = [None] * 2
 

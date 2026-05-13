@@ -1,3 +1,4 @@
+.gitignore
 pybird.egg-info
 dist
 
@@ -8,10 +9,11 @@ montepython/chains/
 
 # tmp
 tmp/
+tests/
 *out/
 
 # General
-.DS_Store
+**/.DS_Store
 .AppleDouble
 .LSOverride
 

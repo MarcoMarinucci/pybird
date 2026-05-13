@@ -99,7 +99,7 @@ class Common(object):
 
             self.N11 = 3  # number of linear termss
             if self.eft_basis in ["eftoflss", "westcoast"]: self.Nct, self.Nnnlo = 6, 2  # number of counterterms k^2 P11, number of NNLO counterterms k^4 P11
-            elif self.eft_basis == "eastcoast": self.Nct, self.Nnnlo = 3, 3
+            elif self.eft_basis in ["eastcoast", 'pbj']: self.Nct, self.Nnnlo = 3, 3
             if self.exact_time:
                 self.N22 = 36  # number of 22-loops
                 self.N13 = 15  # number of 13-loops
@@ -218,7 +218,7 @@ class Common(object):
                 if self.eft_basis in ["eftoflss", "westcoast"]: 
                     self.lct[i] = array([mu[0][l], mu[2][l], mu[4][l], mu[2][l], mu[4][l], mu[6][l]])
                     self.lnnlo[i] = array([mu[4][l], mu[6][l]])
-                elif self.eft_basis == "eastcoast": 
+                elif self.eft_basis in ["eastcoast", 'pbj']: 
                     self.lct[i] = array([mu[0][l], mu[2][l], mu[4][l]])
                     self.lnnlo[i] = array([mu[4][l], mu[6][l], mu[8][l]])
                 if self.exact_time:

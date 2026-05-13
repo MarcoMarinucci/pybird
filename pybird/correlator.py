@@ -68,7 +68,8 @@ class Correlator(object):
                 description="EFT parameters in dictionary to specify as \
                     (\'eft_basis\': \'eftoflss\') \{ \'b1\'(a), \'b2\'(a), \'b3\'(a), \'b4\'(a), \'cct\', \'cr1\'(b), \'cr2\'(b), \'ce0\'(d), \'ce1\'(d), \'ce2\'(d)] \} \
                     (\'eft_basis\': \'westcoast\') \{ \'b1\'(a), \'c2\'(a), \'c4\'(a), \'b3\'(a), \'cct\', \'cr1\'(b), \'cr2\'(b), \'ce0\'(d), \'ce1\'(d), \'ce2\'(d)] \} \
-                    (\'eft_basis\': \'eastcoast\') \{ \'b1\'(a), \'b2\'(a), \'bG2\'(a), \'bgamma3\'(a), \'c0\', \'c2\'(b), \'c4\'(c), \'ce0\'(d), \'ce1\'(d), \'ce2\'(d)] \} \
+                    (\'eft_basis\': \'eastcoast\') \{ \'b1\'(a), \'b2\'(a), \'bG2\'(a), \'bgamma3\'(a), \'c0\', \'c2\'(b), \'c4\'(c), \'ce0\'(d), \'ce1\'(d), \'ce2\'(d)] \} [2004.10607, eq. (2.23)] \
+                    (\'eft_basis\': \'pbj\') \{ \'b1\'(a), \'b2\'(a), \'bG2\'(a), \'bgamma3\'(a), \'c0\', \'c2\'(b), \'c4\'(c), \'ce0\'(d), \'ce1\'(d), \'ce2\'(d)] \} [2207.14784, eq. (2.9)] \
                     if (a): \'b\' in \'output\'; (b): \'multipole\'>=2; (d): \'with_stoch\' is True ",
                 default=None) ,
             "H": Option("H", (float, list, ndarray),
@@ -150,7 +151,7 @@ class Correlator(object):
                 description="Bias (in)dependent evalution. Automatically set to False for \'with_time\': False.",
                    default=False) ,
             "eft_basis": Option("eft_basis", str,
-                description="Basis of EFT parameters: \'eftoflss\' (default), \'westcoast\', or \'eastcoast\'. See cosmology command \'bias\' for more details.",
+                description="Basis of EFT parameters: \'eftoflss\' (default), \'westcoast\', or \'eastcoast\' or \'pbj\'. See cosmology command \'bias\' for more details.",
                 default="eftoflss") ,
             "with_stoch": Option("with_stoch", bool,
                 description="With stochastic terms.",
@@ -495,7 +496,7 @@ class Correlator(object):
                     elif p == 'ce2':
                         if self.co.eft_basis == 'eftoflss':
                             pg_val = f * st[2] / self.c["km"]**2 / self.c["nd"] # f mu^2 k^2 / km^2 / nd
-                        elif self.co.eft_basis in ['eastcoast', 'westcoast']:
+                        elif self.co.eft_basis in ['eastcoast', 'westcoast', 'pbj']:
                             pg_val = st[2] / self.c["km"]**2 / self.c["nd"] # k^2 / km^2 / nd quad | mu^2 k^2 / km^2 / nd
                         pg = pg.at[i].set(pg_val)
                     elif p == 'cr4':
@@ -532,16 +533,21 @@ class Correlator(object):
                     # counterterm : config["eft_basis"] = 'eastcoast'                       # (2.15) and (2.23) of 2004.10607
                     elif p in ['c0', 'c2', 'c4']:
                         ct0, ct2, ct4 = - 2 * ct[0], - 2 * f * ct[1], - 2 * f**2 * ct[2]    # - 2 ct0 k^2 pk_lin , - 2 ct2 f mu^2 k^2 pk_lin , - 2 ct4 f^2 mu^4 k^2 pk_lin
-                        if p == 'c0':   pg[i] = ct0
-                        elif p == 'c2': pg[i] = - f/3. * ct0 + ct2
-                        elif p == 'c4': pg[i] = 3/35. * f**2 * ct0 - 6/7. * f * ct2 + ct4
+                        if self.co.eft_basis == 'eastcoast':
+                            if p == 'c0':   pg[i] = ct0
+                            elif p == 'c2': pg[i] = - f/3. * ct0 + ct2
+                            elif p == 'c4': pg[i] = 3/35. * f**2 * ct0 - 6/7. * f * ct2 + ct4
+                        elif self.co.eft_basis == 'pbj':
+                            if p == 'c0':   pg[i] = ct0
+                            elif p == 'c2': pg[i] = ct2
+                            elif p == 'c4': pg[i] = ct4
                     # stochastic term
                     elif p == 'ce0': pg[i] = st[0] / self.c["nd"] # k^0 / nd 
                     elif p == 'ce1': pg[i] = st[1] / self.c["km"]**2 / self.c["nd"] # k^2 / km^2 / nd 
                     elif p == 'ce2': 
                         if self.co.eft_basis == 'eftoflss':
                             pg[i] = f * st[2] / self.c["km"]**2 / self.c["nd"] # f mu^2 k^2 / kr^2 / nd
-                        elif self.co.eft_basis in ['eastcoast', 'westcoast']:
+                        elif self.co.eft_basis in ['eastcoast', 'westcoast', 'pbj']:
                             pg[i] = st[2] / self.c["km"]**2 / self.c["nd"] # k^2 / km^2 / nd quad | mu^2 k^2 / km^2 / nd
                     # nnlo term: config["eft_basis"] = 'eftoflss' or 'westcoast'
                     elif p == 'cr4': pg[i] = 0.25 * b1**2 * nnlo[0] / self.c["kr"]**4 # ~ 1/4 b1^2 k^4/kr^4 mu^4 pk_lin
@@ -705,10 +711,10 @@ class Correlator(object):
         self.bias = self.cosmo["bias"]
 
         if "b" in self.c["output"]:
-            if "westcoast" in self.c["eft_basis"]:
+            if self.c["eft_basis"] == "westcoast":
                 self.bias["b2"] = 2.**-.5 * (self.bias["c2"] + self.bias["c4"])
                 self.bias["b4"] = 2.**-.5 * (self.bias["c2"] - self.bias["c4"])
-            elif "eastcoast" in self.c["eft_basis"]:
+            elif self.c["eft_basis"] in ['eastcoast', 'pbj']:
                 self.bias["b2"] = self.bias["b1"] + 7/2. * self.bias["bG2"]
                 self.bias["b3"] = self.bias["b1"] + 15. * self.bias["bG2"] + 6. * self.bias["bGamma3"]
                 self.bias["b4"] = 1/2. * self.bias["bt2"] - 7/2. * self.bias["bG2"]
@@ -720,20 +726,20 @@ class Correlator(object):
         if self.c["eft_basis"] in ["eftoflss", "westcoast"]:
             self.gauss_eft_parameters_list = ['cct']
             if self.c["multipole"] >= 2: self.gauss_eft_parameters_list.extend(['cr1', 'cr2'])
-        elif self.c["eft_basis"] == "eastcoast":
+        elif self.c["eft_basis"] in ["eastcoast", 'pbj']:
             self.gauss_eft_parameters_list = ['c0']
             if self.c["multipole"] >= 2: self.gauss_eft_parameters_list.extend(['c2', 'c4'])
         if self.c["with_stoch"]: self.gauss_eft_parameters_list.extend(['ce0', 'ce1', 'ce2'])
         if self.c["with_nnlo_counterterm"]:
             if self.c["eft_basis"] in ["eftoflss", "westcoast"]: self.gauss_eft_parameters_list.extend(['cr4', 'cr6'])
-            elif self.c["eft_basis"] == "eastcoast": self.gauss_eft_parameters_list.append('ct')
+            elif self.c["eft_basis"] in ["eastcoast", 'pbj']: self.gauss_eft_parameters_list.append('ct')
         self.eft_parameters_list = deepcopy(self.gauss_eft_parameters_list)
         if "b" in self.c["output"]:
             if self.c["eft_basis"] in ["eftoflss", "westcoast"]: self.gauss_eft_parameters_list.append('b3')
-            elif self.c["eft_basis"] == "eastcoast": self.gauss_eft_parameters_list.append('bGamma3')
+            elif self.c["eft_basis"] in ["eastcoast", 'pbj']: self.gauss_eft_parameters_list.append('bGamma3')
             if self.c["eft_basis"] == "eftoflss": self.eft_parameters_list.extend(['b1', 'b2', 'b3', 'b4'])
             elif self.c["eft_basis"] == "westcoast": self.eft_parameters_list.extend(['b1', 'c2', 'b3', 'c4'])
-            elif self.c["eft_basis"] == "eastcoast": self.eft_parameters_list.extend(['b1', 'bt2', 'bG2', 'bGamma3'])
+            elif self.c["eft_basis"] in ["eastcoast", 'pbj']: self.eft_parameters_list.extend(['b1', 'bt2', 'bG2', 'bGamma3'])
         if self.c["with_tidal_alignments"]: self.eft_parameters_list.append('bq')
 
     def __read_config(self, config_dict):

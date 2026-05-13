@@ -35,7 +35,8 @@ if is_jax:
             return False
 
 else:
-    from numpy import isnan, savez, load, ndarray, conj, ones, tan, log, logspace, swapaxes, empty, array, linspace, arange, delete, where, pi, cos, sin, log, exp, sqrt, trapz, concatenate, linalg, eye, einsum, einsum_path, zeros, sum, pad, diag, block, array_equal, meshgrid, trapz, geomspace, moveaxis, ones_like, empty_like, real, zeros_like, float32, float64, dot, multiply, add, subtract, unique, hstack, isin, newaxis, max, ix_, transpose, interp, rollaxis, atleast_1d, digitize, diff, clip, stack, printoptions, vstack, power, array_equal, heaviside, prod, inf, nan_to_num, sort, isfinite, mean, tile
+    from numpy import isnan, savez, load, ndarray, conj, ones, tan, log, logspace, swapaxes, empty, array, linspace, arange, delete, where, pi, cos, sin, log, exp, sqrt, concatenate, linalg, eye, einsum, einsum_path, zeros, sum, pad, diag, block, array_equal, meshgrid, geomspace, moveaxis, ones_like, empty_like, real, zeros_like, float32, float64, dot, multiply, add, subtract, unique, hstack, isin, newaxis, max, ix_, transpose, interp, rollaxis, atleast_1d, digitize, diff, clip, stack, printoptions, vstack, power, array_equal, heaviside, prod, inf, nan_to_num, sort, isfinite, mean, tile
+    from numpy import trapezoid as trapz
     from numpy.fft import rfft
     from scipy.linalg import block_diag, det
     from scipy.special import legendre
