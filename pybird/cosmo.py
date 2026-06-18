@@ -1,4 +1,5 @@
 from pybird.module import * 
+from pybird.greenfunction import GreenFunction
 import numpy as np
 import jax
 
@@ -80,8 +81,40 @@ class Cosmo():
             if self.c["with_exact_time"] or self.c["with_quintessence"]:
                 cosmo["z"] = self.c["z"]
                 cosmo["Omega0_m"] = M.Omega0_m()
+                #MM MG part
+                try: cosmo["w0_fld"] = cosmo_dict["w0_fld"]#, cosmo["wa_fld"] = cosmo_dict["wa_fld"]
+                except: pass
             # if "w0_fld" in cosmo_dict:
             #     cosmo["w0_fld"] = cosmo_dict["w0_fld"]
+                if self.c["mg_model"] == "EFTofDE":
+                    try: self.c["expansion_model"] = M.pars["expansion_model"]
+                    except: raise('Asked for EFTofDE, but no expansion_model provided in the log.param')
+                    try: self.c["gravity_model"] = M.pars["gravity_model"]
+                    except: raise('Asked for EFTofDE, but no gravity_model provided in the log.param')
+                if (self.c["expansion_model"] == 'w0wa' and self.c["mg_model"] != "EFTofDE"):
+                    try:
+                        cosmo["w0_fld"] = M.pars['w0_fld']
+                        cosmo["wa_fld"] = M.pars['wa_fld']
+                    except: raise('No w0-wa selected inside the likelihood')
+                elif self.c["mg_model"] == "EFTofDE":
+                    # parameters_smg__1 ---> alpha_B0
+                    try: cosmo["alpha_B0"] = float(M.pars['parameters_smg'].split(', ')[0])
+                    except: pass
+                    # parameters_smg__2 ---> alpha_M0
+                    try: cosmo["alpha_M0"] = float(M.pars['parameters_smg'].split(', ')[1])
+                    except: pass
+                        # parameters_smg__3 ---> alpha_T0
+                    try: cosmo["alpha_T0"] = float(M.pars['parameters_smg'].split(', ')[2])
+                    except: pass
+                    # parameters_smg__4 ---> eta  (time-dep a^eta)
+                    try: cosmo["eta"] = float(M.pars['parameters_smg'].split(', ')[3])
+                    except: pass
+                    if self.c['expansion_model'] == 'w0wa':
+                        try:
+                            cosmo["w0_fld"] = float(M.pars['expansion_smg'].split(', ')[1])
+                            cosmo["wa_fld"] = float(M.pars['expansion_smg'].split(', ')[2])
+                        except: raise('You selected w0-wa as background for the EFTofDE model but w0 and wa are not specified in the cosmo dictionary. Check expansion_smg!')
+            
             if self.c["with_ap"]:
                 cosmo["H"], cosmo["DA"] = M.Hubble(self.c["z"]) / M.Hubble(0.), M.angular_distance(self.c["z"]) * M.Hubble(0.)
 
@@ -91,6 +124,8 @@ class Cosmo():
                 cosmo["fz"] = array([M.scale_independent_growth_factor_f(z) for z in self.c["redshift_bin_zz"]])
                 cosmo["rz"] = array([comoving_distance(z) for z in self.c["redshift_bin_zz"]])
 
+            self.GF = None
+            zfid = self.c["z"]
             if self.c["with_quintessence"]:
                 # starting deep inside matter domination and evolving to the total adiabatic linear power spectrum.
                 # This does not work in the general case, e.g. with massive neutrinos (okish for minimal mass though)
@@ -99,11 +134,60 @@ class Cosmo():
                 def scale_factor(z): return 1/(1.+z)
                 Omega0_m = cosmo["Omega0_m"]
                 w = cosmo["w0_fld"]
-                GF = GreenFunction(Omega0_m, w=w, quintessence=True)
-                Dq = GF.D(scale_factor(zfid)) / GF.D(scale_factor(zm))
+                self.GF = GreenFunction(Omega0_m, w=w, quintessence=True)
+                Dq = self.GF.D(scale_factor(zfid)) / self.GF.D(scale_factor(zm))
                 Dm = M.scale_independent_growth_factor(self.c["z"]) / M.scale_independent_growth_factor(zm)
                 cosmo["pk_lin"] *= Dq**2 / Dm**2 * ( 1 + (1+w)/(1.-3*w) * (1-Omega0_m)/Omega0_m * (1+zm)**(3*w) )**2 # 1611.07966 eq. (4.15)
-                cosmo["f"] = GF.fplus(1/(1.+self.c["z"]))
+                cosmo["f"] = self.GF.fplus(1/(1.+self.c["z"]))
+            #MM MG part
+            if self.c["mg_model"] == 'nDGP':
+                zm = 5 # z in matter domination
+                def scale_factor(z): return 1/(1.+z)
+                Omega0_m = cosmo["Omega0_m"]
+                #this is a temporary solution for Omegarc, we cannot treat it as bias, this will be a problem for analyses with multiple redshifts.
+                Om_rc = 10**self.c["logOmegarc"]#self.c["Omega_rc"]
+                self.GF = GreenFunction(Omega0_m, background='lcdm', model = self.c['mg_model'], Omega_rc = Om_rc)
+                Dp = self.GF.D(scale_factor(self.c["z"]))/self.GF.D(scale_factor(zm))
+                D_class = M.scale_independent_growth_factor(self.c["z"]) / M.scale_independent_growth_factor(zm)
+                D_lcdm = self.GF.D_LCDM(scale_factor(self.c["z"]))/self.GF.D(scale_factor(zm))
+                cosmo["pk_lin"] *= Dp**2 / D_lcdm**2
+                cosmo["D"] = self.GF.D(scale_factor(self.c["z"]))/self.GF.D(scale_factor(0))
+                #if self.c["multipole"]!=0: cosmo["f"] = GF.fplus(scale_factor(zfid))
+                cosmo["f"] = self.GF.fplus(scale_factor(self.c["z"]))
+            
+            if self.c["expansion_model"] == 'w0wa':
+                #no need to rescale, I can take it directly from Class
+                cosmo["f"] = M.scale_independent_growth_factor_f(self.c["z"])
+
+            if self.c["mg_model"] == 'EFTofDE':
+                #starting depp inside matter domination
+                zm = 5.
+                def scale_factor(zz): return 1./(1.+zz)
+                Omega0_m = cosmo["Omega0_m"]
+                alphaB0  = cosmo["alpha_B0"]
+                alphaM0  = cosmo["alpha_M0"]
+                alphaT0  = cosmo["alpha_T0"]
+                eta   = cosmo["eta"]
+                back  = self.c["expansion_model"]
+                mod   = self.c["mg_model"]
+                if self.c["expansion_model"] == 'w0wa': 
+                    w0 = cosmo["w0_fld"]
+                    wa = cosmo["wa_fld"]
+                else:
+                    w0 = -1.
+                    wa = 0.
+                self.GF = GreenFunction(Omega0_m,w = w0, wa = wa,
+                                        alphaM=alphaM0, alphaT=alphaT0,alphaB=alphaB0, eta = eta,
+                                        background = back, model = mod, timedep = self.c["gravity_model"])
+                cosmo["D"] = self.GF.D(scale_factor(self.c["z"]))/self.GF.D(scale_factor(0))
+                cosmo["f"] = self.GF.fplus(scale_factor(self.c["z"]))
+
+            if self.c["mg_model"] == 'bootstrap':
+                Omega0_m = cosmo["Omega0_m"]
+                self.GF = GreenFunction(Omega0_m, background = 'lcdm', model = self.c["mg_model"])
+            if self.c["mg_model"] == 'lcdm' and self.co.exact_time:
+                Omega0_m = cosmo["Omega0_m"]
+                self.GF = GreenFunction(Omega0_m, background = 'lcdm', model = 'lcdm')
 
             # wiggle-no-wiggle split # algo: 1003.3999; details: 2004.10607
             def get_smooth_wiggle_resc(kk, pk, alpha_rs=1.): # k [h/Mpc], pk [(Mpc/h)**3]

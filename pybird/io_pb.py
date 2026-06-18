@@ -144,6 +144,10 @@ class ReadWrite(object):
                                   "eft_basis", "with_stoch", "with_nnlo_counterterm", "with_time", "with_exact_time",
                                   "with_ap", "with_survey_mask", "with_binning", "with_wedge", "with_redshift_bin"]
 
+       # MM: add this for default MG pars
+        default_mg = {"logOmegarc": 0., "fR0": 0.,
+                      "expansion_model": 'lcdm', "mg_model": 'lcdm',
+                      "gravity_model": 'propto_omega', "with_exact_time": False}
         fc_sky = [] # skylist of formatted config dict for Correlator
 
         for sky, fd in zip(c['sky'].keys(), fd_sky):
@@ -154,6 +158,11 @@ class ReadWrite(object):
             for option in options_for_correlator: 
                 if option in c: 
                     fc[option] = c[option]
+            #MM: MG part
+            for keys in default_mg.keys():
+                if keys in c.keys():
+                    fc[keys] = c[keys]
+                else: fc[keys] = default_mg[keys]
             fc['z'] = fd['z']
             fc['xdata'] = array(fd['x'])
             if 'Pk' in c['output']: 

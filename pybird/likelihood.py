@@ -314,6 +314,12 @@ class Likelihood(object):
         if self.c["with_rs_marg"]:
             alpha_rs_marg = free_b[free_b_name.index("alpha_rs")]
             pad += 1
+        #MM added mg_model to the list of parameters that are not reshaped into per-sky parameters 
+        #MM need to add other models?
+        try:
+            if self.c["mg_model"] in ['nDGP', 'fR']:
+                pad += 1
+        except: self.c["mg_model"] = None
 
         free_b_sky = array(free_b[pad:]).reshape(self.nsky, -1)
         free_b_name_sky = np.array(free_b_name[pad:]).reshape(self.nsky, -1)
@@ -323,6 +329,12 @@ class Likelihood(object):
         for i in range(self.nsky):
             self.b_sky.append({bn: free_b_sky[i][n] for n, fbn in enumerate(free_b_name_sky[i]) for bn in self.b_name if fbn.split('_', 1)[0] == bn})
             self.b_sky[i].update({bn: 0. for bn in self.b_name if bn not in self.b_sky[i]})
+            # MM added mg_model
+            if self.c["mg_model"] == 'nDGP':
+                self.b_sky[i].update({'logOmegarc': free_b[free_b_name.index("logOmegarc")]})
+            elif self.c["mg_model"] == 'fR':
+                self.b_sky[i].update({'fR0': free_b[free_b_name.index("fR0")]})
+            else: pass
 
         if need_cosmo_update:
             if cosmo_module == 'taylor' and cosmo_engine is not None: 

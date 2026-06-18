@@ -70,7 +70,7 @@ class Common(object):
 
     def __init__(self, Nl=2, kmin=0.001, kmax=0.25, km=1., kr=1., nd=3e-4, eft_basis='eftoflss',
         halohalo=True, with_cf=False, with_time=True, accboost=1., optiresum=False, orderresum=16, 
-        with_uvmatch=False, with_irmatch=False, exact_time=False, quintessence=False, with_tidal_alignments=False, nonequaltime=False, keep_loop_pieces_independent=False, with_emu=False):
+        with_uvmatch=False, with_irmatch=False, exact_time=False, quintessence=False, Omega_rc=None, fR0 = None, background='lcdm', model='lcdm',with_tidal_alignments=False, nonequaltime=False, keep_loop_pieces_independent=False, with_emu=False):
 
         self.eft_basis = eft_basis
         self.halohalo = halohalo
@@ -84,6 +84,10 @@ class Common(object):
         self.with_irmatch = with_irmatch
         self.exact_time = exact_time
         self.quintessence = quintessence
+        self.background = background
+        self.model = model
+        self.Omega_rc = Omega_rc
+        self.fR0 = fR0
         # if self.quintessence: self.exact_time = True
         self.with_tidal_alignments = with_tidal_alignments
         self.nonequaltime = nonequaltime

@@ -59,7 +59,7 @@ class Bird(object):
         reducePsCfl(): Regroup terms that share the same EFT parameters.
     """
 
-    def __init__(self, cosmology=None, with_bias=True, eft_basis='eftoflss', with_stoch=False, with_nnlo_counterterm=False, co=co, which='full'):
+    def __init__(self, cosmology=None, with_bias=True, eft_basis='eftoflss', with_stoch=False, with_nnlo_counterterm=False, co=co, which='full', bias = None, GF = None):
 
         self.co = co
         self.with_bias = with_bias
@@ -67,6 +67,8 @@ class Bird(object):
         self.with_stoch = with_stoch
         self.with_nnlo_counterterm = with_nnlo_counterterm
         self.with_tidal_alignments = self.co.with_tidal_alignments
+
+        self.GF = GF
 
         if cosmology is not None: self.setcosmo(cosmology)
 
@@ -120,10 +122,19 @@ class Bird(object):
             self.b13 = empty(shape=(self.co.Nl, self.co.N13))
             self.b22 = empty(shape=(self.co.Nl, self.co.N22))
             self.bct = empty(shape=(self.co.Nl))
+            if self.co.model == 'fR':
+                self.b11 = np.empty(shape=(self.co.Nl, self.co.Nk))
+                self.b13 = np.empty(shape=(self.co.Nl, self.co.N13, self.co.Nk))
+                self.b22 = np.empty(shape=(self.co.Nl, self.co.N22, self.co.Nk))
+                self.bct = np.empty(shape=(self.co.Nl, self.co.Nk))
         else:
             self.b11 = empty(shape=(self.co.N11))
             self.bct = empty(shape=(self.co.Nct))
             self.bloop = empty(shape=(self.co.Nloop))
+            if self.co.model == 'fR':
+                self.b11 = np.empty(shape=(self.co.N11, self.co.Nk))
+                self.bct = np.empty(shape=(self.co.Nct, self.co.Nk))
+                self.bloop = np.empty(shape=(self.co.Nloop, self.co.Nk))
 
         if self.with_stoch:
             # if self.co.with_cf: # no stochastic term for cf in general ; below is the stochastic terms from a Pade expansion of the Fourier-space stochastic terms
@@ -169,12 +180,15 @@ class Bird(object):
             self.Cnnlol = None
             # if self.co.with_cf: self.Cnnlol = None
             # else: self.Pnnlol = None
-    
+        #MM
+        if bias is not None: self.setBias(bias) #I need this for the bootstrap, nDGP, fR
+
 
     def setcosmo(self, cosmo):
 
         self.kin = cosmo["kk"]
         self.Pin = cosmo["pk_lin"]
+        self._Pin_orig = np.array(cosmo["pk_lin"])
 
         if self.Pin is not None:
 
@@ -191,17 +205,102 @@ class Bird(object):
 
         if not self.co.with_time: self.D = cosmo["D"]
         self.f = cosmo["f"]
+        self._f_orig = cosmo["f"]*1.
         self.DA = cosmo["DA"]
         self.H = cosmo["H"]
         if self.co.exact_time:
-            if "w0_fld" in cosmo: self.w0 = cosmo["w0_fld"]
-            else: self.w0 = None
+            try: 
+                if cosmo["w0_fld"] is None:
+                    self.w0 = -1.
+                else:
+                    self.w0 = cosmo["w0_fld"]
+            except: self.w0 = -1.
+            try: 
+                if cosmo["wa_fld"] is None:
+                    self.wa = 0.
+                else:
+                    self.wa = cosmo["wa_fld"]
+            except: self.wa = 0.
+
             self.Omega0_m = cosmo["Omega0_m"]
             self.z = cosmo["z"]
-            self.Y1 = 0.
-            self.G1t = 3/7.
-            self.V12t = 1/7.
-            self.G1 = 1.
+            if self.co.model == 'nDGP':
+                try: self.Om_rc = self.co.Omega_rc
+                except: raise Exception("You asked for MG model nDGP, but didn't specify the value of Omega_rc in the .yaml file")
+            else: self.Om_rc = None
+            if self.co.model == 'fR':
+                try: self.fR0 = self.co.fR0
+                except: raise Exception("You asked for MG model f(R), but didn't specify the value of f_{R,0} in the .yaml file")
+            else: self.fR0 = None
+            if self.co.model == "EFTofDE":
+                try: self.alphaB = cosmo["alpha_B0"]
+                except: self.alphaB = 0.
+                try: self.alphaT = cosmo["alpha_T0"]
+                except: self.alphaT = 0.
+                try: self.alphaM = cosmo["alpha_M0"]
+                except: self.alphaM = 0.
+                try: self.eta = cosmo["eta"]
+                except: self.eta = None
+                try: self.w0 = cosmo["w0_fld"]
+                except: self.w0 = - 1
+                try: self.wa = cosmo["wa_fld"]
+                except: self.wa = - 1
+            else: 
+                self.alphaB = None
+                self.alphaT = None
+                self.alphaM = None
+                self.eta = None
+            self.a = 1/(1.+self.z)
+            if self.GF is None:
+                raise Exception("You selected exact_time_dependence but didn't specifiy a GF, see correlator.py")
+
+
+            if self.co.model == "bootstrap":
+                self.Y1 = 0
+                self.G1t = 0
+                self.V12t = 0
+                self.Y1LCDM = self.GF.Y(self.a)
+                self.G1tLCDM = self.GF.mG1t(self.a)
+                self.V12tLCDM = self.GF.mV12t(self.a)
+                #self.V12dLCDM = self.GF.mV12d(self.a)
+
+            else:
+                self.Y1 = self.GF.Y(self.a)
+                self.G1t = self.GF.mG1t(self.a)
+                self.V12t = self.GF.mV12t(self.a)
+                #self.V12d = self.GF.mV12d(self.a)
+            if self.co.model == 'quintessence':
+                self.G1 = self.GF.G(self.a)
+                self.f = self.GF.fplus(self.a)
+            elif self.co.model == 'fR':
+                #if self.f[0][0] == 0.:
+                try:
+                    if self.f[0] == 0.:
+                        self.f = self.f[:len(self.co.k)]
+                        pass
+                    else:
+                        self.f = self.GF.f_scale(self.a, self.co.k) [0]##still not sure about the k
+                except:
+                    pass
+                try:
+                    if self.f[0][0] == 0.:
+                        self.f = self.f[:len(self.co.k)]
+                        pass
+                    else:
+                        self.f = self.GF.f_scale(self.a, self.co.k) [0]##still not sure about the k
+                except:
+                    pass
+                self.G1 = 1.
+
+                #if self.co
+            else: self.G1 = 1.
+            # print (self.Y1, self.G1t, self.V12t, self.G1, self.f, GF.fplus(self.a))
+            # except:
+            #     print ("setting EdS time approximation")
+            #     self.Y1 = 0.
+            #     self.G1t = 3/7.
+            #     self.V12t = 1/7.
+            #     self.G1 = 1.
         if self.co.nonequaltime:
             self.D = cosmo["D"]
             self.D1 = cosmo["D1"]
@@ -217,32 +316,79 @@ class Bird(object):
         bs : array
             An array of 7 EFT parameters: b_1, b_2, b_3, b_4, c_{ct}/k_{nl}^2, c_{r,1}/k_{m}^2, c_{r,2}/k_{m}^2
         """
+        if self.co.model == 'bootstrap':
+            ##MM
+            self.epsf = bias["epsf"]
+            self.epsD = bias["epsD"]
 
+            self.Pin = (1 + self.epsD)**2 * self._Pin_orig
+            try: 
+                self.Plin = interp1d(self.kin, self.Pin, kind='cubic')
+                self.P11 = self.Plin(self.co.k)
+            except: 
+                self.Plin = None
+                self.P11 = None
+
+            
+            self.f = (1 + self.epsf) * self._f_orig
         f = self.f
 
         if self.co.exact_time:
             ## EdS: Y1 = 0., G1t = 3/7., V12t = 1/7.
+
+            #bootstrap functions
+            if self.co.model == 'bootstrap':
+                #********
+                ##MM: TRYING TO PUT IT BACK AS I DID IN THE TECHNION CLUSTER
+                self.epsag = bias["epsag"] # this is \epsilon_{a_\gamma}
+                self.epsdg = bias["epsdg"] # this is \epsilon_{d_{\gamma}}
+                self.epsdga = bias["epsdga"] # this is \epsilon_{d_{\gamma a}}
+                self.agLCDM = 2.*self.Y1LCDM + 10./7.
+                self.dgLCDM = 2*self.G1tLCDM
+                self.dgaLCDM = 2.*self.Y1LCDM - 2*self.V12tLCDM + 3./7.
+                #self.aggLCDM = 2.*self.Y1LCDM - 2*self.V12dLCDM + 3./7.
+
+                #the following parameters are needed for the paper with Amendola
+                #d_{\gamma, a}^{(3)}
+                self.dga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12t(self.a) - 2
+                #a_{\gamma, a}^{(3)}
+                #self.aga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12d(self.a) - 2
+                #a_\gamma^{(2)}
+                self.ag2LCDM = 2*self.GF.mG1d(self.a)
+                #d_\gamma^{(2)}
+                self.dg2LCDM = 2*self.GF.mG1t(self.a)
+                self.ag = (1. + self.epsag)*self.agLCDM
+                self.dg = (1. + self.epsdg)*self.dgLCDM
+                self.dga = (1. + self.epsdga)*self.dgaLCDM
+                self.Y1 = self.ag/2. - 5./7.#self.ag
+                self.G1t = self.dg/2.#self.dga
+                self.V12t = self.ag/2. - self.dga/2. - 1./2.# - self.dgg/4.
+
             G1 = self.G1
             Y1 = self.Y1
             G1t = self.G1t
             V12t = self.V12t
+        ##MM: putting back the f(R) implementation we made with Dennis
+        id = 1.
+        if(self.co.model == 'fR'):
+            id = np.ones(f.shape[0])
 
-        b1 = bias["b1"]
-        b2 = bias["b2"]
-        b3 = bias["b3"]
-        b4 = bias["b4"]
+        b1 = bias["b1"] * id
+        b2 = bias["b2"] * id
+        b3 = bias["b3"] * id
+        b4 = bias["b4"] * id
         if self.eft_basis in ["eftoflss", "westcoast"]:
-            b5 = bias["cct"] / self.co.km**2
-            b6 = bias["cr1"] / self.co.kr**2
-            b7 = bias["cr2"] / self.co.kr**2
+            b5 = bias["cct"] * id / self.co.km**2
+            b6 = bias["cr1"] * id / self.co.kr**2
+            b7 = bias["cr2"] * id / self.co.kr**2
         elif self.eft_basis == 'eastcoast': # inversion of (2.23) of 2004.10607
-            ct0 = bias["c0"] - f/3. * bias["c2"] + 3/35. * f**2 * bias["c4"]
-            ct2 = bias["c2"] - 6/7. * f * bias["c4"]
-            ct4 = bias["c4"]
+            ct0 = bias["c0"] - f/3. * bias["c2"] + 3/35. * f**2 * bias["c4"] * id
+            ct2 = bias["c2"] - 6/7. * f * bias["c4"] * id
+            ct4 = bias["c4"] * id
         elif self.eft_basis == 'pbj': 
-            ct0 = bias["c0"] 
-            ct2 = bias["c2"] 
-            ct4 = bias["c4"]
+            ct0 = bias["c0"] * id
+            ct2 = bias["c2"] * id
+            ct4 = bias["c4"] * id
 
         if self.with_stoch:
             if self.eft_basis in ["eastcoast", 'pbj', "westcoast"]:
@@ -1059,14 +1205,20 @@ class Bird(object):
         """
 
         # PZ: we can change all this function by a sum of all the terms that are asked (instead of calling setfullPs() and constructing an intermediate array that is useless)        
-        self.setBias(bs)
+        if bs is not None: self.setBias(bs)
         self.Ps = [None] * 2
 
         if "full" in what:
-            self.Ps[0] = einsum('b,lbx->lx', self.b11, self.P11l)
-            self.Ps[1] = einsum('b,lbx->lx', self.bloop, self.Ploopl) + einsum('b,lbx->lx', self.bct, self.Pctl)
-            if self.with_stoch: self.Ps[1] += einsum('b,lbx->lx', self.bst, self.Pstl)
-            if self.with_nnlo_counterterm: self.Ps[1] += einsum('b,lbx->lx', self.cnnlo, self.Pnnlol)
+            if self.co.model == 'fR':
+                self.Ps[0] = np.einsum('bx,lbx->lx', self.b11, self.P11l)
+                self.Ps[1] = np.einsum('bx,lbx->lx', self.bloop, self.Ploopl) + np.einsum('bx,lbx->lx', self.bct, self.Pctl)
+                if self.with_stoch: self.Ps[1] += np.einsum('b,lbx->lx', self.bst, self.Pstl)
+                if self.with_nnlo_counterterm: self.Ps[1] += np.einsum('b,lbx->lx', self.cnnlo, self.Pnnlol)
+            else:
+                self.Ps[0] = np.einsum('b,lbx->lx', self.b11, self.P11l)
+                self.Ps[1] = np.einsum('b,lbx->lx', self.bloop, self.Ploopl) + np.einsum('b,lbx->lx', self.bct, self.Pctl)
+                if self.with_stoch: self.Ps[1] += np.einsum('b,lbx->lx', self.bst, self.Pstl)
+                if self.with_nnlo_counterterm: self.Ps[1] += np.einsum('b,lbx->lx', self.cnnlo, self.Pnnlol)
 
         elif "linear" in what: 
             self.Ps[0] = einsum('b,lbx->lx', self.b11, self.P11l)

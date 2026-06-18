@@ -93,6 +93,21 @@ class Correlator(object):
             "w0_fld": Option("w0_fld", float,
                 description="Dark energy equation of state parameter. To specify in presence of dark energy if \'with_exact_time\' is True (otherwise w0 = -1).",
                 default=None) ,
+            "wa_fld": Option("wa_fld", float,
+                description="Dark energy equation of state parameterfor evolving model. To specify for exact time dependence if varied (otherwise wa = 0).", 
+                default=None) ,
+            "alpha_T0": Option("alpha_T0", float,
+                description="EFTofDE parameter, today's amplitude of the alpha_T parameter",
+                default=None) ,
+            "alpha_B0": Option("alpha_B0", float,
+                description="EFTofDE parameter, today's amplitude of the alpha_B parameter",
+                default=None) ,
+            "alpha_M0": Option("alpha_M0", float,
+                description="EFTofDE parameter, today's amplitude of the alpha_M parameter, parametrizes the variation fo the Planck mass",
+                default=None) ,
+            "eta": Option("eta", float,
+                description="EFTofDE parameter, exponent for the alpha evolution: alpha(a) = alpha_0 a^eta",
+                default=None) ,
             "Dz": Option("Dz", (list, ndarray),
                 description="Scale independent growth function over redshift bin. To specify if \'with_redshift_bin\' is True.",
                 default=None) ,
@@ -167,10 +182,25 @@ class Correlator(object):
                 default=True) ,
             "with_exact_time": Option("with_exact_time", bool,
                 description="Exact time dependence or EdS approximation.",
-                default=True) ,
+                default=False) ,
             "with_quintessence": Option("with_quintessence", bool,
                 description="Clustering quintessence.",
                 default=False) ,
+            "logOmegarc": Option("logOmegarc", float,
+                description="nDGP parameter",
+                default=-10) ,
+            "fR0": Option("fR0", float,
+                description="f(R) modified gravity with LCDM background.",
+                default=None) ,
+            "expansion_model": Option("expansion_model", str,
+                description="Selects the time dependece of the background evolution, at the moment we have lcdm and w0wa.",
+                default='lcdm',),
+            "mg_model": Option("mg_model", str,
+                description="Selects the model for non-linearities, at the moment we have lcdm, quintessence, nDGP, EFTofDE, bootstrap, fR",
+                default='lcdm',),
+            "gravity_model": Option("gravity_model", str,
+                description="Selects the time dependence fo the EFTofDE parameters, at the moment we have propto_omega, propto_scale, eft_alphas_power_law, constant_alphas",
+                default='propto_omega',),
             "with_nonequal_time": Option("with_nonequal_time", bool,
                 description="Non equal time correlator. Automatically set \'with_time\' to False ",
                 default=False) ,
@@ -335,7 +365,7 @@ class Correlator(object):
         # Loading PyBird engines
         self.load_engines(load_engines=load_engines)
         
-    def compute(self, cosmo_dict=None, cosmo_module=None, cosmo_engine=None, do_core=True, do_survey_specific=True):
+    def compute(self, cosmo_dict=None, cosmo_module=None, cosmo_engine=None, do_core=True, do_survey_specific=True, bias=None):
         """Compute cosmological correlations based on provided parameters.
         
         Parameters
@@ -361,18 +391,28 @@ class Correlator(object):
         The method handles cosmological parameter processing, validates inputs,
         and performs the main EFT calculations for power spectra or correlation functions.
         """
+        #---------------------------IMPORTANT!!!-------------------------------
+        #MM: I am adding "bias" inside compute because with the bootstrap I will 
+        # define the epsilon parameters as biases, but since they are
+        # "cosmological biases" I need them when I compute things inside Bird.
+        #----------------------------------------------------------------------
         if cosmo_dict:
-            if not cosmo_module: cosmo_dict_local = cosmo_dict.copy()
+            if not cosmo_module: 
+                self.GF = None
+                cosmo_dict_local = cosmo_dict.copy()
             else: # cosmo parameters to be passed to cosmo_module called internally 
+                self.GF = None
                 cosmo_class = Cosmo(config = self.c)
                 cosmo_dict_local = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine)
+                self.GF = cosmo_class.GF
         
         elif cosmo_module and cosmo_engine: 
+            self.GF = None
             cosmo_dict_local = {}
             cosmo_class = Cosmo(config = self.c)
             cosmo_dict_class = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine)
             cosmo_dict_local.update(cosmo_dict_class)
-        
+            self.GF = cosmo_class.GF
         else: raise Exception('provide \'cosmo_dict\' of PyBird inputs or \'cosmo_dict\' of cosmological parameters to be passed either to a \'cosmo_module\' (name of the Boltzmann solver) to be called internally, or to an external \'cosmo_engine\' (Boltzmann solver)')
         
         self.__read_cosmo(cosmo_dict_local)
@@ -383,7 +423,11 @@ class Correlator(object):
             if self.c['with_emu']: self.c['with_bias'] = False # no such option when emulator is on since there is no speed gain (resummation is already emulated)
 
         if do_core:
-            self.bird = Bird(self.cosmo, with_bias=self.c["with_bias"], eft_basis=self.c["eft_basis"], with_stoch=self.c["with_stoch"], with_nnlo_counterterm=self.c["with_nnlo_counterterm"], co=self.co)
+            if self.c["mg_model"] == 'bootstrap':
+                self.__is_bias_conflict(bias)
+                self.bird = Bird(self.cosmo, with_bias=self.c["with_bias"], eft_basis=self.c["eft_basis"], with_stoch=self.c["with_stoch"], with_nnlo_counterterm=self.c["with_nnlo_counterterm"], co=self.co, bias = self.bias, GF = self.GF)
+            else:
+                self.bird = Bird(self.cosmo, with_bias=self.c["with_bias"], eft_basis=self.c["eft_basis"], with_stoch=self.c["with_stoch"], with_nnlo_counterterm=self.c["with_nnlo_counterterm"], co=self.co, GF = self.GF)
             if self.c["with_nnlo_counterterm"]: self.bird.Pnnlo = self.co.k**4 * self.bird.P11 
             if not self.c["with_emu"]: 
                 self.nonlinear.PsCf(self.bird)
@@ -587,7 +631,9 @@ class Correlator(object):
 
         self.co = Common(Nl=self.c["multipole"], kmin=self.c["kmin"], kmax=self.c["kmax"], km=self.c["km"], kr=self.c["kr"], nd=self.c["nd"], eft_basis=self.c["eft_basis"],
             halohalo=self.c["halohalo"], with_cf=self.c["with_cf"], with_time=self.c["with_time"], accboost=self.c["accboost"], optiresum=self.c["optiresum"],
-            exact_time=self.c["with_exact_time"], quintessence=self.c["with_quintessence"], with_uvmatch=self.c["with_uvmatch_2"], with_irmatch=self.c["with_irmatch_2"], 
+            exact_time=self.c["with_exact_time"], Omega_rc=10**self.c["logOmegarc"],
+            #fR0=self.c["fR0"],
+            background = self.c["expansion_model"], model = self.c["mg_model"], quintessence=self.c["with_quintessence"], with_uvmatch=self.c["with_uvmatch_2"], with_irmatch=self.c["with_irmatch_2"], 
             with_emu=self.c["with_emu"],
             with_tidal_alignments=self.c["with_tidal_alignments"], nonequaltime=self.c["with_common_nonequal_time"], keep_loop_pieces_independent=self.c["keep_loop_pieces_independent"])
         if load_engines:
@@ -741,6 +787,9 @@ class Correlator(object):
             elif self.c["eft_basis"] == "westcoast": self.eft_parameters_list.extend(['b1', 'c2', 'b3', 'c4'])
             elif self.c["eft_basis"] in ["eastcoast", 'pbj']: self.eft_parameters_list.extend(['b1', 'bt2', 'bG2', 'bGamma3'])
         if self.c["with_tidal_alignments"]: self.eft_parameters_list.append('bq')
+        #MM
+        if self.c['mg_model'] == 'bootstrap': self.eft_parameters_list.extend(['epsD', 'epsf', 'epsag', 'epsdg', 'epsdga'])
+        #elif self.c['mg_model'] == 'nDGP': self.eft_parameters_list.extend(['logOmegarc'])
 
     def __read_config(self, config_dict):
 
@@ -796,6 +845,9 @@ class Correlator(object):
         if self.c['with_emu']: 
             self.c['with_time'] = True
             self.c['with_exact_time'] = True
+        #MM: just setting it to be sure
+        if self.c["mg_model"] == 'bootstrap':
+            self.c["with_exact_time"] = True
 
 class BiasCorrelator(Correlator):
     """A class for loading pre-computed correlations.
