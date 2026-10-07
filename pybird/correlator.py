@@ -403,14 +403,14 @@ class Correlator(object):
             else: # cosmo parameters to be passed to cosmo_module called internally 
                 self.GF = None
                 cosmo_class = Cosmo(config = self.c)
-                cosmo_dict_local = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine)
+                cosmo_dict_local = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine, bias=bias)
                 self.GF = cosmo_class.GF
         
         elif cosmo_module and cosmo_engine: 
             self.GF = None
             cosmo_dict_local = {}
             cosmo_class = Cosmo(config = self.c)
-            cosmo_dict_class = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine)
+            cosmo_dict_class = cosmo_class.set_cosmo(cosmo_dict, module=cosmo_module, engine=cosmo_engine, bias=bias)
             cosmo_dict_local.update(cosmo_dict_class)
             self.GF = cosmo_class.GF
         else: raise Exception('provide \'cosmo_dict\' of PyBird inputs or \'cosmo_dict\' of cosmological parameters to be passed either to a \'cosmo_module\' (name of the Boltzmann solver) to be called internally, or to an external \'cosmo_engine\' (Boltzmann solver)')

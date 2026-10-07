@@ -353,14 +353,17 @@ class Bird(object):
                 #self.aggLCDM = 2.*self.Y1LCDM - 2*self.V12dLCDM + 3./7.
 
                 #the following parameters are needed for the paper with Amendola
-                #d_{\gamma, a}^{(3)}
-                self.dga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12t(self.a) - 2
-                #a_{\gamma, a}^{(3)}
-                #self.aga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12d(self.a) - 2
-                #a_\gamma^{(2)}
-                self.ag2LCDM = 2*self.GF.mG1d(self.a)
-                #d_\gamma^{(2)}
-                self.dg2LCDM = 2*self.GF.mG1t(self.a)
+                # they depend only on cosmology (GF) and a, so compute them once per Bird / scale factor
+                if not np.array_equal(getattr(self, "_amendola_a", None), self.a):
+                    #d_{\gamma, a}^{(3)}
+                    self.dga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12t(self.a) - 2
+                    #a_{\gamma, a}^{(3)}
+                    #self.aga3LCDM = 4*self.GF.mG1d(self.a) - 4*self.GF.mV12d(self.a) - 2
+                    #a_\gamma^{(2)}
+                    self.ag2LCDM = 2*self.GF.mG1d(self.a)
+                    #d_\gamma^{(2)}
+                    self.dg2LCDM = 2*self.GF.mG1t(self.a)
+                    self._amendola_a = self.a
                 self.ag = (1. + self.epsag)*self.agLCDM
                 self.dg = (1. + self.epsdg)*self.dgLCDM
                 self.dga = (1. + self.epsdga)*self.dgaLCDM

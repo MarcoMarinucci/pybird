@@ -28,7 +28,7 @@ class Cosmo():
     def _is(self, module, module_name): 
         return module.casefold() == module_name.casefold()
 
-    def set_cosmo(self, cosmo_dict, module='class', engine=None):
+    def set_cosmo(self, cosmo_dict, module='class', engine=None, bias=None):
         
         # Handle None cosmo_dict
         if cosmo_dict is None:
@@ -59,8 +59,10 @@ class Cosmo():
                 if self.c["with_bias"] and "bias" in cosmo_dict: del cosmo_dict_local["bias"] # remove to not pass it to classy that otherwise complains
                 if not self.c["with_time"] and "A" in cosmo_dict: del cosmo_dict_local["A"] # same as above
                 if self.c["with_redshift_bin"]: zmax = max(self.c["redshift_bin_zz"])
-                else: 
+                else:
                     zmax = self.c["z"]
+                # without Omega_Lambda = 0, CLASS closes the budget with Lambda and w0_fld, wa_fld have no effect
+                if self.c["expansion_model"] == 'w0wa': cosmo_dict_local.setdefault("Omega_Lambda", 0.)
                 M = Class()
                 M.set(cosmo_dict_local)
                 M.set({'output': 'mPk', 'P_k_max_h/Mpc': 10.**log10kmax, 'z_max_pk': zmax, })
@@ -145,8 +147,9 @@ class Cosmo():
                 zm = 5 # z in matter domination
                 def scale_factor(z): return 1/(1.+z)
                 Omega0_m = cosmo["Omega0_m"]
-                #this is a temporary solution for Omegarc, we cannot treat it as bias, this will be a problem for analyses with multiple redshifts.
-                Om_rc = 10**self.c["logOmegarc"]#self.c["Omega_rc"]
+                # logOmegarc is sampled like an EFT parameter: the likelihood passes it in bias, otherwise take the config value
+                logOmegarc = bias["logOmegarc"] if bias is not None and "logOmegarc" in bias else self.c["logOmegarc"]
+                Om_rc = 10**logOmegarc
                 self.GF = GreenFunction(Omega0_m, background='lcdm', model = self.c['mg_model'], Omega_rc = Om_rc)
                 Dp = self.GF.D(scale_factor(self.c["z"]))/self.GF.D(scale_factor(zm))
                 D_class = M.scale_independent_growth_factor(self.c["z"]) / M.scale_independent_growth_factor(zm)

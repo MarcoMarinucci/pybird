@@ -336,14 +336,26 @@ class Likelihood(object):
                 self.b_sky[i].update({'fR0': free_b[free_b_name.index("fR0")]})
             else: pass
 
+        # MG/bootstrap parameters enter the loops through the bias dict, so with fixed cosmology
+        # the correlator is recomputed only if they changed since the last compute.
+        mg_keys = {"bootstrap": ["epsD", "epsf", "epsag", "epsdg", "epsdga"], "nDGP": ["logOmegarc"]}.get(self.c["mg_model"], [])
+        if not hasattr(self, "_mg_last"): self._mg_last = [None] * self.nsky
         if need_cosmo_update:
-            if cosmo_module == 'taylor' and cosmo_engine is not None: 
+            if cosmo_module == 'taylor' and cosmo_engine is not None:
                 cosmo_engine.set(self) # here cosmo_module is the Taylor expansion of the cosmology-dependent pieces in PyBird
             else:
                 for i in range(self.nsky):
                     cosmo_dict_i = cosmo_dict[i] if cosmo_dict is not None else None
-                    self.correlator_sky[i].compute(cosmo_dict=cosmo_dict_i, cosmo_engine=cosmo_engine, cosmo_module=cosmo_module) 
+                    self.correlator_sky[i].compute(cosmo_dict=cosmo_dict_i, cosmo_engine=cosmo_engine, cosmo_module=cosmo_module, bias=self.b_sky[i])
                     if self.c["with_bao_rec"]: self.alpha_sky[i] = self.get_alpha_bao_rec(cosmo_engine, i_sky=i)
+                    self._mg_last[i] = {k: self.b_sky[i].get(k) for k in mg_keys}
+        elif mg_keys and cosmo_module != 'taylor':
+            for i in range(self.nsky):
+                mg_i = {k: self.b_sky[i].get(k) for k in mg_keys}
+                if mg_i != self._mg_last[i]:
+                    cosmo_dict_i = cosmo_dict[i] if cosmo_dict is not None else None
+                    self.correlator_sky[i].compute(cosmo_dict=cosmo_dict_i, cosmo_engine=cosmo_engine, cosmo_module=cosmo_module, bias=self.b_sky[i])
+                    self._mg_last[i] = mg_i
 
         if self.marg_lkl:
             if True: 
