@@ -405,8 +405,9 @@ class GreenFunction(object):
     def rm_ag_dg2(self,w,x):
         '''Right members of the differential equations for a_gamma^2 and d_gamma^2'''
         a1, d1 = w
+        # mu multiplies the full delta in the Poisson equation, delta_2 included (as in rm_ag_dg3 and in the scale-dependent rm_ag_dg2_vec)
         rm = [self.f_num(x)*(2. - 2.*a1 + d1),
-        self.f_num(x)*(- d1 + 3./2. *self.Om_x(x)/(self.f_num(x)**2.)*(a1 -d1) + 2.*self.mu2(np.e**x)/(self.f_num(x)**2.)*(3./2.*self.Om_x(x))**2.)]
+        self.f_num(x)*(- d1 + 3./2. *self.mu_x(x)*self.Om_x(x)/(self.f_num(x)**2.)*(a1 - d1) + 2.*self.mu2(np.e**x)/(self.f_num(x)**2.)*(3./2.*self.Om_x(x))**2.)]
         return rm
     def compute_ag_dg2(self):
         xvals = np.log(np.logspace(-7,0.5,100,base=np.e))
