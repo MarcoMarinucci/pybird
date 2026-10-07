@@ -244,7 +244,7 @@ class Bird(object):
                 try: self.w0 = cosmo["w0_fld"]
                 except: self.w0 = - 1
                 try: self.wa = cosmo["wa_fld"]
-                except: self.wa = - 1
+                except: self.wa = 0.
             else: 
                 self.alphaB = None
                 self.alphaT = None
@@ -252,10 +252,14 @@ class Bird(object):
                 self.eta = None
             self.a = 1/(1.+self.z)
             if self.GF is None:
-                raise Exception("You selected exact_time_dependence but didn't specifiy a GF, see correlator.py")
+                if self.co.model not in ['lcdm', 'quintessence'] or self.co.background != 'lcdm':
+                    raise Exception("You selected exact_time_dependence but didn't specifiy a GF, see correlator.py")
+                # no GF (e.g. cosmo_dict passed directly, or a module other than class): EdS time functions, as on master
+                self.Y1 = 0.
+                self.G1t = 3/7.
+                self.V12t = 1/7.
 
-
-            if self.co.model == "bootstrap":
+            elif self.co.model == "bootstrap":
                 self.Y1 = 0
                 self.G1t = 0
                 self.V12t = 0
@@ -269,7 +273,7 @@ class Bird(object):
                 self.G1t = self.GF.mG1t(self.a)
                 self.V12t = self.GF.mV12t(self.a)
                 #self.V12d = self.GF.mV12d(self.a)
-            if self.co.model == 'quintessence':
+            if self.co.model == 'quintessence' and self.GF is not None:
                 self.G1 = self.GF.G(self.a)
                 self.f = self.GF.fplus(self.a)
             elif self.co.model == 'fR':

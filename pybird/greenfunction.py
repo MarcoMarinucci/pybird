@@ -95,7 +95,8 @@ class GreenFunction(object):
             if self.model == 'quintessence':
                 self.quintessence = True
                 self.w0 = w
-                self.LCDM = False
+                self.w = np.array(w) if self.vectorize else w # C(), H() and the quintessence integrals use self.w
+                # LCDM stays True: quintessence goes through the integral expressions (H, C with w), as on master
             elif self.model == 'nDGP':
                 self.nDGP = True
                 self.Omega_rc = Omega_rc
@@ -219,7 +220,7 @@ class GreenFunction(object):
         elif self.background == 'w0wa':
             return self.w0 + self.wa*(1 - a)
         else:
-            raise('You have selected an expansion model which is not among lcdm or w0wa')
+            raise Exception('You have selected an expansion model which is not among lcdm or w0wa')
 
     def H(self, a):
         """Conformal Hubble"""
@@ -238,7 +239,7 @@ class GreenFunction(object):
     def H_NC(self, a):
         """Non-Conformal Hubble, H0=1"""
         if self.w0wa:
-            return (self.Omega0_m/a/a/a + (1.-self.Omega0_m)*a**(-3*(1 + self.w0 + self.wa))*np.e*(-3*(1-a)*self.wa))**0.5 #expansion in w0-wa
+            return (self.Omega0_m/a/a/a + (1.-self.Omega0_m)*a**(-3*(1 + self.w0 + self.wa))*np.e**(-3*(1-a)*self.wa))**0.5 #expansion in w0-wa
         else:
             return (self.Omega0_m/a/a/a + (1.-self.Omega0_m))**0.5 #expansion fixed to LCDM
 
@@ -617,7 +618,7 @@ class GreenFunction(object):
         # else:
         #     return quad(self.I2t,0,a,args=(a,), epsrel=self.epsrel)[0]
         if self.LCDM == False:
-            return 1 - self.G1t(a)
+            return 1 - self.mG1t(a)
         else:
             return quad(self.I2t,0.,a,args=(a,), epsrel=self.epsrel)[0]
 

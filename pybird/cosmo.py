@@ -23,6 +23,7 @@ class Cosmo():
     """ 
     def __init__(self, config):
         self.c = config
+        self.GF = None # only set by the class module; Correlator reads it after set_cosmo for every module
 
     def _is(self, module, module_name): 
         return module.casefold() == module_name.casefold()
@@ -88,14 +89,14 @@ class Cosmo():
             #     cosmo["w0_fld"] = cosmo_dict["w0_fld"]
                 if self.c["mg_model"] == "EFTofDE":
                     try: self.c["expansion_model"] = M.pars["expansion_model"]
-                    except: raise('Asked for EFTofDE, but no expansion_model provided in the log.param')
+                    except: raise Exception('Asked for EFTofDE, but no expansion_model provided in the log.param')
                     try: self.c["gravity_model"] = M.pars["gravity_model"]
-                    except: raise('Asked for EFTofDE, but no gravity_model provided in the log.param')
+                    except: raise Exception('Asked for EFTofDE, but no gravity_model provided in the log.param')
                 if (self.c["expansion_model"] == 'w0wa' and self.c["mg_model"] != "EFTofDE"):
                     try:
                         cosmo["w0_fld"] = M.pars['w0_fld']
                         cosmo["wa_fld"] = M.pars['wa_fld']
-                    except: raise('No w0-wa selected inside the likelihood')
+                    except: raise Exception('No w0-wa selected inside the likelihood')
                 elif self.c["mg_model"] == "EFTofDE":
                     # parameters_smg__1 ---> alpha_B0
                     try: cosmo["alpha_B0"] = float(M.pars['parameters_smg'].split(', ')[0])
@@ -113,7 +114,7 @@ class Cosmo():
                         try:
                             cosmo["w0_fld"] = float(M.pars['expansion_smg'].split(', ')[1])
                             cosmo["wa_fld"] = float(M.pars['expansion_smg'].split(', ')[2])
-                        except: raise('You selected w0-wa as background for the EFTofDE model but w0 and wa are not specified in the cosmo dictionary. Check expansion_smg!')
+                        except: raise Exception('You selected w0-wa as background for the EFTofDE model but w0 and wa are not specified in the cosmo dictionary. Check expansion_smg!')
             
             if self.c["with_ap"]:
                 cosmo["H"], cosmo["DA"] = M.Hubble(self.c["z"]) / M.Hubble(0.), M.angular_distance(self.c["z"]) * M.Hubble(0.)
@@ -134,7 +135,7 @@ class Cosmo():
                 def scale_factor(z): return 1/(1.+z)
                 Omega0_m = cosmo["Omega0_m"]
                 w = cosmo["w0_fld"]
-                self.GF = GreenFunction(Omega0_m, w=w, quintessence=True)
+                self.GF = GreenFunction(Omega0_m, w=w, model='quintessence')
                 Dq = self.GF.D(scale_factor(zfid)) / self.GF.D(scale_factor(zm))
                 Dm = M.scale_independent_growth_factor(self.c["z"]) / M.scale_independent_growth_factor(zm)
                 cosmo["pk_lin"] *= Dq**2 / Dm**2 * ( 1 + (1+w)/(1.-3*w) * (1-Omega0_m)/Omega0_m * (1+zm)**(3*w) )**2 # 1611.07966 eq. (4.15)
@@ -185,7 +186,7 @@ class Cosmo():
             if self.c["mg_model"] == 'bootstrap':
                 Omega0_m = cosmo["Omega0_m"]
                 self.GF = GreenFunction(Omega0_m, background = 'lcdm', model = self.c["mg_model"])
-            if self.c["mg_model"] == 'lcdm' and self.co.exact_time:
+            if self.c["mg_model"] == 'lcdm' and self.c["with_exact_time"]:
                 Omega0_m = cosmo["Omega0_m"]
                 self.GF = GreenFunction(Omega0_m, background = 'lcdm', model = 'lcdm')
 

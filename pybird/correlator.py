@@ -182,7 +182,7 @@ class Correlator(object):
                 default=True) ,
             "with_exact_time": Option("with_exact_time", bool,
                 description="Exact time dependence or EdS approximation.",
-                default=False) ,
+                default=True) ,
             "with_quintessence": Option("with_quintessence", bool,
                 description="Clustering quintessence.",
                 default=False) ,
@@ -825,7 +825,9 @@ class Correlator(object):
         if "bm" in self.c["output"]: self.c["halohalo"] = False
         else: self.c["halohalo"] = True
 
-        if self.c["with_quintessence"]: self.c["with_exact_time"] = True
+        # with_quintessence (master's flag) and mg_model = 'quintessence' select the same model: Cosmo checks the first, Bird the second
+        if self.c["mg_model"] == 'quintessence': self.c["with_quintessence"] = True
+        if self.c["with_quintessence"]: self.c.update({"with_exact_time": True, "mg_model": 'quintessence'})
 
         self.c["with_common_nonequal_time"] = False # this is to pass for the common Class to setup the numbers of loops (22 and 13 gathered by default)
         if self.c["with_nonequal_time"]:

@@ -147,7 +147,7 @@ class ReadWrite(object):
        # MM: add this for default MG pars
         default_mg = {"logOmegarc": 0., "fR0": 0.,
                       "expansion_model": 'lcdm', "mg_model": 'lcdm',
-                      "gravity_model": 'propto_omega', "with_exact_time": False}
+                      "gravity_model": 'propto_omega'} # with_exact_time is in options_for_correlator; if absent, the Correlator default applies
         fc_sky = [] # skylist of formatted config dict for Correlator
 
         for sky, fd in zip(c['sky'].keys(), fd_sky):
